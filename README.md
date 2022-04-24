@@ -48,7 +48,7 @@ además, es reutilizable en problemas con circunstancias similares.
 	- Mediante __JAVACONFIG__ se puede prescindir por completo de XML
 	- @Configuration indica, a nivel de clase, que en ésta, se va a definir uno o más de un @Bean (que será una etiquera a nivel de método).
 	- Mediante AnnotationConfigApplicationContext registeamos las clases de configuración. El escaneao tiene el mismo comportamiento que en XML
-	- 
+
 ## Semanas 2 y 3
 ### Curso de Spring Boot y Spring MVC 5: Creando una aplicación con Spring Boot y Spring MVC 
 
