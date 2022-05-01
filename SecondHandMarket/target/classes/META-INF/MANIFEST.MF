@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Built-By: Usuario
+Build-Jdk: 17.0.2
+Implementation-Title: SecondHandMarket
+Implementation-Version: 0.0.1-SNAPSHOT
+Implementation-Vendor-Id: com.unai
+Implementation-URL: https://projects.spring.io/spring-boot/#/spring-boot
+ -starter-parent/SecondHandMarket
+Created-By: Maven Integration for Eclipse
+
