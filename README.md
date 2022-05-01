@@ -48,7 +48,7 @@ además, es reutilizable en problemas con circunstancias similares.
 	- Mediante __JAVACONFIG__ se puede prescindir por completo de XML
 	- @Configuration indica, a nivel de clase, que en ésta, se va a definir uno o más de un @Bean (que será una etiquera a nivel de método).
 	- Mediante AnnotationConfigApplicationContext registeamos las clases de configuración. El escaneao tiene el mismo comportamiento que en XML
-
+ 
 ## Semanas 2 y 3
 ### Curso de Spring Boot y Spring MVC 5: Creando una aplicación con Spring Boot y Spring MVC 
 
@@ -163,5 +163,85 @@ plantillas que visualizará el usuario.
 	- Para las consultas JPQL o SQL la consulta se hará con @Query("consulta"). A esta consulta se le pueden pasar arguméntos con ?1, ?2, ... y parámetros con :nombre, :apellidos, ....
 	- Para QueryDLS habrá que crear una interfaz que extienda de QuerydlsPredicateExecutor, en la que se encuentran métodos como findById, findAll, count, exist, etc.
 	- QueryByExample se basa en búsqueda peoporcionando un ejemplo de lo quequeremos encontrar.
+	
+## Semana 4
+### Curso de desarrollo de una API REST con Spring Boot
 
+1. Introducción
 
+	- REST es un nuevo enfoque de la arquitectura de aplicaciones empresariales. Se basa en el protocolo HTTP, sin estados,
+los recursos son representados por URIs, su interfaz es uniforme y utiliza un sisema de capas.
+Ofrece como ventajas la separación de cliente - servidor, es más visible, fiable y escalable, soporta variedad de formatos: JSON,XML,...; en general, es más rápido y utiliza menos ancho de banda.
+
+	- Con Lonbok, haciendo uso de las anotaciones @Seter, @Getter, @RequiredArgsConstructor, @ToString, etc; evitaremos tener que generar getters, setters, constructoes, equals, etc.
+
+	- En Spring Boot se utilizará @RestController para los controladores orientados a REST. Es una combinación de @Controller y @ResponseBody. Al incluir la dependencia starter web, se incluyen algunos conversores poe defecto para entregar al cliente el contenido en un formato determinado: StringHttpMessageConverter, que convierte a cadenas de caracteres, y 
+MappingJackson[2] HttpMessageConverter: convierte a JSON usando Jackson. Además se usarán las clases HttpEntity < T> (que representa una petición o respuesta HTTP), RequestEntity < T>, ResponseEntity < T>, MediaType y HttpHeaders.
+
+2. Primer servicio REST con Spring Boot
+
+	- Anotaciones para el mapero de rutas a operaciones CRUD: @GetMapping, @PostMapping, @PutMapping, @DeleteMapping.
+	- @RequestBody permite inyectar el cuerpo de la petición en un objeto, @PathVariable permite inyectar un fragmento de la URI en una variable
+	- Mediante la clase ResponseEntity indicaremos el código de respuesta, de modo que en un Get devolveremos el código 200 ok si se encuentra el recurso y 404 Not Found si no, en el POST el 201 Created, etc.
+	- El patrón DTO: Data Transfer Object; es un objeto POJO que agrupa datos de la capa de negocio, y es recomendable usarlos en lugar de usar las entidades tal cual fuera de la capa de lógica de negocio. Pueden tener parte de los datos de una sola entidad, algunos datos de más de una entidad o incluso todos los datos de varias entidades. Está pensado para aligerar las transacciones entre cliente y servidor. Con ModelMapper se facilita la creación de DTO mediante asignación dinámica, tendremos que añadirlo a las dependencias y crear un bean del tipo ModelMapper para la aplicación; la transformación a DTO puede hacerse explicitamente en el controlador, o creando un componente independiente para inyectar donde haga falta.
+
+3. Manejo de errores y excepciones
+
+	- @ResponseStatus nos permite indicar código de estado y un texto de respuesta para nuestras propias excepciones.
+	- El mensaje de error por defecto de Spring (DefaultErrorAttributes) contiene la fecha, el estado (código), el nombre del error, el mensaje y la ruta en la que se ha producido. Es posible que queramos modificarlo y hacer nuestro propio mensaje de error. Se hará un modelo de este mensaje en una clase POJO qe deberá incluir los campos que estimemos necesarios.
+	- @ExceptionHandler es una anotación que nos permite unificar excepciones y personalizar los mensajes. La anotación puede ubicarse en un método de cualquier controlador y manejará las excepciones del tipo indicado que se produzcan en dicho controlador. Puede recibir como argumento una instancia de una excepción, objetos Request, Response, objetos de sesión, Locale,etc. Como retorno, puede devolver void, String, @ResponseBody, HttpEntity, ResponseEntity, o un Model, ModelAndView o Map (motor de plantillas).
+
+	- @ControllerAdvice es una expecialización de @Component para clases que declaran los métodos @ExceptionHandler, @InitBinder o @ModelAttribure para ser compartidos entr múltiples clases de @Controlles. 
+		- @RestControllerAdvice unifica @ControllerAdvice y @ResponseBody. 
+		- Para manejar una excepción, se escogerá el primer método dentro de la clase @ControllerAdvice que esté anotado para tratar la excepción con @ExceptionHandler. 
+		- Puede haber más de una clase anotada con @ControllerAdvice, en cuyo caso, puede ser recomendable el use de @Order o @Priority para establecer una preferencia en el tratamiento de errores. 
+		- En caso de varias opciones para una excepción dentro de una clase, escogerá la más cercana a la raíz.
+		- Si no se indica lo contrario, la anotación hace que la clase trate posibles excepciones en cualquier controlador. Podemos acotar el radio de acción especificando el package, las clases, anotaciones, etc.
+		- Las clases anotadas como @ControllerAdvice pueden extender ResponseEntityExceptionHandler, que proporciona una lista de métodos que podemos sobreescribir como handleExceptionInternal, handleMissingPathVariable, handleTypeMismatch... además de poder añadir nuestros propios métodos. Si se sobreescribe handleExceptionInternal, el resto de errores manejados por la clase base ResponseEntityExceptionHandler utilizarán nuestra clase de error.
+		
+	- ResponseStatusException, disponible desde Spring 5, se trata como cualquier otra excepción y nos permite indicar el estado (HttpStatus - obligatorio), la razón (String - opcional) y la causa (Throwable - opcional). Permite el manejo de errores con poco esfuerzo, es un tipo de excepción que puede llevar asociados distintos códigos de estado en distintos lugares, no requiere tantas clases de excepción personalizadas, permite un mayor control en el manjo de las excepciones... pero por contra se pierde la globalidad ganada con @ControllerAdvice, habrá duplicación de código y el modelo de error será el estándar, así que si se quiere modificar, habrá que hacerlo creando un @Component que esxtienda a DefaultErrorAtrributes y sobreescribir el método getErrorAttributes.
+
+4. Manejo de CORS
+	
+	- Por razones de seguridad, los navegadores prohíben las llamadas AJAX a reursos que residen fuera del origen actual. CORS es una especificación del W3C implementada por casi todos los navegadores que permite especificar que dominios estarán autorizados y para qué.
+	- Consiste en un mecanismo que utiliza cabeceras HTTP adicionales para permitir a un cliente accefer a recursos desde un origen diferente al servidor actual.
+	- En Spring pueden configurarse mediente @CrossOrigin
+	
+		- Disponible desde Spring 4.2
+		- A nivel de método o de clase (controlador).
+		- Atributos como origins, methods, maxAge, allowCredentials(true), allowedHeaders, exposedHeaders, etc.
+	
+5. Subida de ficheros
+
+	- Cuando Spring procesa una petición multiparte nos permite acceder a ésta o éstas a través de @RequestParam. La clase MultipartFile, tiene los métodos convenientes para procesar el fichero.
+		- La interfaz StorageService tiene los métodos que debería proporcionarnos un servicio de almacenamiento de ficheros.
+		- La clase FileSystemStorageServide sirve para el almacenamiento en nuestro sistema de archivos, y dispone de los métodos: store, load, loadAsResource...
+		- Las clases de error StorageException y StorageFileNotFoundException.
+		- La clase Application para la inicialización
+		- En controlador, el método serveFile.
+		
+	- Uso de @RequestParam vs @RequestPart
+		
+		- @RequestParam asocia un parámetro de la petición a un argumento de un método de un controlador, puede usarse en peticiones multiparte y es válido para anotar MultipartFile, pero si no es de tipo String o MultipartFile necesita un Converter registrado.
+		- @RequestPart asocia una parte de una petición multiparte a un argumento de un método de un controlador, es análogo a @RequestBody, puede usarse con un MultipartFile o cualquier tipo de dato que tenga asociado un HttpMessageConverter.
+		- Es probable que @Request`Param se usa con campos de formulario clave-valor, mientras que @RequestPart se use con partes con contenido más complejo: JSON, XML...
+		 
+
+6. Documentando nuestra API REST
+
+	- Una API que no está documentada posiblemente será difícil de utilizar. No todo el mundo entiende lo mismo por REST y en ocasiones, se implementan reglas de validación que nos obligan a utilizar tipos de datos concretos.
+	- La documentación se puede crear con Spring REST Docs o con Swagger + SwaggerUI.
+	- Spring Rest Docs combina la documentación escrita a mano con Asciidactor y fragmentos autogenerados producidos con Spring MVC Test. Está dentro del paraguas de Sptring, pero nos obliga a escribir los test y tenerlos actualizados.
+	- Swagger es un framework de código abierto que ayuda a los desarrolladores a diseñar, construir, documentary  construir servicios web RESTful. Para nosotros, Swagger son una serie de reglas, especificaciones y herramientas que nos ayudar a documentar nuestras APIs.
+	- Swagger utiliza un json que incluye toda la documentación de nuestra API, además, Swagger UI es capaz de transformar ese JSON y hacerlo interactivo, lo que nos permite probar las peticiones, incluso con nuestros propios datos.
+	- SpringFox es un conjunto de librerías que nos permite generar automáticamente la documentaciópn de nuestra API. Es capaz de generar esta documentación en formato Swagger, de este modo, no tenemos que generar manualmente el ficher swagger.json y dispondremos de clases y anotaciones para afinar la configuración.
+	
+		- Habrá que añadir las dependencias al pom.xml.
+		- Anotación @EnableSwagger2 en una clase @Configuration.
+		- Necesitamos un bean de tipo Docket que incluya la configuración para generar la documentación.
+		- Podemos personalizar (a través de anotaciones y programáticamente) el resultado de la documentación.
+		- Podemos incluir una ApiInfo acorde a nuestro proyecto.
+		- Disponemos de algunas anotaciones que nos permiten personalizar determinados aspectos:
+	
+			+ A nivel de método de controlador: @ApiOperation, @ApiResponse/s @ApiParam.
+			+ A nivel de objetos POJO: @ApiModelProperty, que nos permite personalizar la información de cada propiedad del modelo: nombre, tipo de dato, valor de ejemplo, posicón.
