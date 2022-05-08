@@ -245,3 +245,152 @@ MappingJackson[2] HttpMessageConverter: convierte a JSON usando Jackson. Además
 	
 			+ A nivel de método de controlador: @ApiOperation, @ApiResponse/s @ApiParam.
 			+ A nivel de objetos POJO: @ApiModelProperty, que nos permite personalizar la información de cada propiedad del modelo: nombre, tipo de dato, valor de ejemplo, posicón.
+
+## Semana 5
+### Curso de elementos avanzados en tu API REST con Spring Boot
+
+1. Algunas mejoras para nuestra API
+	
+	- Paginación de resultados
+	
+		- Por eficacia y para mejorar la experiencia de usuario, cuando el número de resultados de una consulta es grande, es necesario dividirlos.
+		- Con Spring Data JPA los repositorios permiten realizar consultas paginadas, con JpaRepository. Existe el método Page< T> findAll(Pageable pageable), y todas las consultas pueden ser del tipo Page< T> findByAlgo(Algo algo, Pageable pageable).
+		- Pageable es un elemento de entrada en una consulta paginada. Una interfaz con la información necesaria para extraer una página de resultados, que además dispone de métodos como getPageNumber(), getPageSize y getSort().
+		- Page < T> es el resultado de una consulta paginada. Se trata de una sublista de una lista de objetos que además tiene información sobre la posición de ésta en la lista completa. Tiene métodos como getContent(), getTotalPages(), getTotalElements(), getNumber(), getSize() y getNumberOfElements().
+		- La paginación debe ser soportada por la capa de persistencia subyacente. Las clase Page y Pageable pertenecen a Spring Data, no a Spring Web. Spring Boot configura automáticamente el soporte web Spring Data Web Support, lo que nos permite usar Pageable en un controlador.
+		
+	- Manejo de parámetros en el Query
+	
+		- Con la anotación @RequestParam posdemos recoger cualquier parámetro del controlador, puede darse un valor por defecto y puede indicarse si estos parámetros son obligatorios u opcionales. Habrá que ajustar el método en el controlador, servicio, repositorio y hacer algún añadido en el manejo de errores.
+		- Con Specification podemos crear predicados reutilizables para utilizar con Criteria Query que pueden ser todo los complejos que necesitemos. JpaSpecificationExecutor: Un repostrio que además de CrudRepository extienda a JpaSpecificationExecutor podrá ejecutar consultas con un Specification.
+	
+	- Soporte para XML
+		
+		- Un API REST debe definirse en base a recursos, pero éstos, pueden tener diferentes formatos en su representación (JSON, XML,...). Mediante encabezados puede indicarse el formato que se envía o se recibe (Content-Type y Accept). Spring Boot al detectar Jackson 2 en el classpath, formatea por defecto a JSON, por tanto si intentamos utilizar otro formato sin más, obtendremos un error 406 (Not Acceptable). Para XML habrá que añadir las dependencias de Jackson XML.
+	
+2. Modelos de datos más complejos
+	
+	- Ajuste de clases con JSONView
+	
+		- Jackson 2 + Spring nos proporcionan un mecanismo para seleccionar qué campos de un objeto serán transformados a JSON, lo que permite tener para un solo objeto Java diferentes representaciones JSON, esto puede usarse tanto en entidades como en DTO.
+		- Definimos una clase que tendrá dentro varias interfaces. Estas interfaces serán las diferentes vistas para la clase o entidad. además, algunas de estas interfaces pueden heredar unas de otras. 
+		- En el modelo se usará @JsonView sobre los diferentes atributos, definiendo para cada uno, en qué vista o vistas lo vamos a querer obtener. Los atributos que no tengan ningún JsonView asociado se obtendrán siempre.
+		- A nivel de método se anota con @JsonView con la vista que queremos obtener.
+		- Tambien se añade en application.properties: spring.jackson.mapper.default-view-inclusion=true
+		- Es recomendable usarlo cuando tenemos distintos métodos que devuelvan distintas vistas de una misma clase, o cuando en función del ROL del usuario que hace la petición queremos devolver más o menos campos.
+	
+	- No es lo mismo crear un controlador para una entidad sin asociaciones que para una entidad asociada con otras. Si la entidad tiene asociaciones, debemos considerar qué hacer al respecto, ya sea al listar, al crear, al editar...
+	
+		- Asociaciones many-to-one
+		
+			- En el GET de Todos, seguramente no se requieran todos los atributos y sea mejor usar un DTO.
+			- En el GET de Uno (por ID), segytamente se busque una representación más completa, por lo que se usará otro DTO diferente, analizando qué atributos son necesarios (que tal vez no sean todos).
+			- En el POST, dependerá mucho del tipo de atributos, si existen datos derivados (que dependen de más de un campo), etc. Lo habiual es que para una entidad con varias asociaciones se necesite otro DTO diferente.
+			- En el PUT, generalmente servirá el mismo DTO que el del POST, pero si algunos atributos no son modificables, o lo son pero de una forma "especial", es posible que haga falta un nuevo DTO.	
+			- En el DELETE no suele hacer falta la representación, basta con el ID, pues no se suele devolver contenido. En caso de querer devolver el elemento eliminado se usaría el DTO del GET por ID.
+			
+		- Asociaciones one-to-many
+	
+			- Suele ser complementaria a la asociación de muchos a uno. Los expertos en JPA/Hibernate no recomiendan implementar asociaciones uno a muchos unidireccionales, ya que provocan mal rendimiento, se recomienda por tanto un tratamiento bidireccional. Para que esta bidirecionalidad no provoque errores al usar lombok. Usando a nivle de entidad las anotaciones @OneToMany(...) y @ManyToOne con @JoinColumn(...).A nivel de JSON las anotaciones JsonManagedReference para el enlace padre o reenvío y JsonBackReference para el enlace hijo.
+			- En el GET Todos, la mejor solución será crear un DTO con dos niveles, uno para la parte padre y otro para la hija.
+			- En el GET por ID seguramente no haga falta devolver atributos que hagan relación a otras asociaciones, se podría usar DTO en la parte hija de la relación o también @JsonView.
+			- En el POST lo mejor es crear un DTO que tenga los datos de las dos partes.
+			- En el PUT es posible que sea necesario un nuevo DTO, pero tal vez se pueda usar el mismo que para el POST
+			- Para el DELETE posiblemente necesitemos un borrado en cascada (si se elimina por ejemplo una categoría, habría que eliminar los elementos que tienen esa categoría), generalemene no necesita reprsentación, igual que en las many-to-one.
+
+		- Asociaciones many to many
+	 		- Lo mejor es la bidireccionalidad y proceder igual que en el caso anterior.
+	 
+3. HATEOAS y Spring data REST test
+
+	- Principios HATEOAS y HAL
+	
+		- HATEOAS: Hypermedia as the engine of application state → Hipermedia como el motor del estado de la aplicación. Dado un punto de entrada genérico de la aplicación podemos ser capaces de descubrir recursos. La información devuelta por el servidor siempre incluye hipervínculos. 
+		- HAL:  Hypertext Application Language. Estándar para definir hipermedia como enlaces a recursos externos dentro de código XML o JSON.
+		- Proyecto SpringHATEOAS: facilita la creación de representaciones REST que siguen el principio HATEOAS. Se centra en la creación de enlaces y el ensamblaje de representación.
+		- SpringHAL Browser/Explorer nos proporciona una aplicación web para cruzar nuestra API REST y forma parte de Spring Data REST.
+		- Spring Data REST es la suma de Spring Data + Spring HATEOAS + HAL. Permite exponer, de forma muy sencilla, repositorios de Spring Data como si fuera un API Rest que sigue los principios HATEOAS y en formato HAL.
+	
+	- Spring Data REST
+	
+		- Spring Data REST es parte del proyecto general Spring Data y facilita la creación de servicios web REST basados en hipermedios sobre los repositorios de Spring Data. Se basa en los repositorios de Spring Data, analiza el modelo de dominio de nuestra aplicación y expone los recursos HTTP controlados por hipermedia (HATEOAS).
+
+			- Expone una API REST reconocible (discoverable) para nuestro modelo de dominio utilizando HAL.
+			- Expone recursos de tipo item, colección y asociación que representan a nuestro modelo.
+			- Soporta paginación a través de links navegacionales.
+			- Soporte para filtrado de colecciones.
+			- Expone mecanismos de búsqueda para métodos de consulta definidos en nuestros repositorios.
+			-  Podemos engancharnos (hook) en el manejo de peticiones REST y
+otros eventos a través del manejo de ApplicationEvents de Spring.
+			- Expone metadatos sobre el modelo como un esquema JSON o ALPS
+			- Permite definir representaciones específicas del modelo a través de proyecciones.
+			- Envía una variante personalizada del HAL browser para aprovechar los metadatos expuestos.
+			- Permite personalizaciones avanzadas de los recursos predeterminados expuestos.
+			- Actualmente (versión 3.2.0) soporta JPA, MongoDB, Neo4j, Solr, Cassandra y Gemfire.
+
+	- Configuración
+	
+		- En la cración de un nuevo proyecto Spring Starter Project se deben incluir además de las dependencias usuales (Web, Data Jpa, H2, Lombok), Rest Repositories y Rest Repositories HAL Browser.
+
+		-Spring Data REST nos permite customizar o configurar algunos aspectos como la URI base, la estrategia de detección de repositorios, los parámeros de paginación, el formato de salida...
+
+	- Paginación y búsqueda
+	
+		- En lugar de devolver un gran conjunto de resultados, Spring Data REST reconoce algunos parámetros de URL que influyen en el tamaño de la página y el número de la página de inicio. Si nuestro repositorio extiende a PagingAndSortingRepository<T, ID> (o a JpaRepository<T, ID>, que a su vez extiende al anterior), y accedemos a la lista de todas las entidades, obtendremos las 20 primeras. Podemos modificar el tamaño o cambiar el número de página con los parámetros page y size en la URL.
+		- Spring Data REST también es capaz de exponer nuestras consultas en el repositorio como endpoints. Estas, además, también puede ser paginadas.
+		- Las búsquedas paginadas suelen producir varios enlaces para navegar a las demás páginas. El tipo o número de enlaces dependen del tamaño y página y la página actual.
+		- Spring Data REST reconoce los parámetros de ordenación utilizados por los repositorios subyacentes. Para ordenar sus resultados en una propiedad en particular, agregamos el parámetro sort a la URL con el nombre de la propiedad sobre la que deseamos ordenar los resultados. Se puede controlar la dirección de la ordenación agregando una coma (,) al nombre de la propiedad más 'asc' o 'desc'. 
+
+	- Proyecciones
+	
+		- Por defecto, Spring Data REST exporta los objetos de dominio tal cual están definidos. Los datos primitivos, se exportan tal cual. Para los datos que asocian con otro modelo, si hay un repositorio exportado, como una URI (también objeto anidado embedded); si no hay repositorio exportado, como un objeto anidado. 
+		- Nos puede interesar tener algunos endpoints en los cuales los datos que se obtengan del objeto no sean todos, sino solamente unos pocos.
+		- Las proyecciones con Spring Data Rest se definen a través de una interfaz, con @Projection se indica el nombre de la proyección y la clase sobre la que se define. Con un método getter por cada dato que queremos exportar.
+		 ```
+		 	@Projection(name = "ciudadSinUbicacion", types = { Ciudad.class })
+			public interface CiudadProj {
+			String getNombre();
+			}
+
+	- Excerpts: Composición de modelos
+		-Se trata de una proyección que queremos usar en lugar del modelo habitual. Se aplica automáticamente a un recurso de tipo colección. Suele ser habitual obtener estructura de objetos diferentes cuando obtenemos un listado de una entidad, y cuando obtenemos una sola instancia de la entidad (en el listado, normalmente, no obtenemos tantos datos).
+
+		- La anotación @RepositoryRestResource incluye la propiedad excerptProjection, que nos permite indicar una proyección para usar como excerpt de este repositorio.
+
+		- Si nuestra clase modelo incluye asociaciones, es posible que en la proyección que vamos a usar en los recursos de tipo colección necesitemos algunos de los datos asociados. Es posible componer un objeto con los datos asociados para que la respuesta que obtenga el cliente sea algo más completa.
+		
+4. Elementos orientados a producción
+
+	- Añadir una base de datos real: Postgresql
+		
+		- Postgresql es un sistema gestor de base de datos gratuíta, opensource, multiplataforma, con alta concurrencia y ofrecido gratuitamente en plataformas como heroku.
+		- Docker es un contenedor de aplicaciones. Éstos son entornos ligeros de tiempo de ejecución que proporcionan a las aplicaciones los archivos, las variables y las bibliotecas que necesitan para ejecutarse, maximizando de esta forma su portabilidad.
+
+		- Para conectar la API REST con Postgresql se debe añadir la dependencia en el pom.xml y añadir las properties necesarias para definir los parámetros del Datasource.
+
+	- Creación de un nuevo perfil de configuración
+		- Los perfiles de Spring permiten un mecanismo para para separar determinadas partes en la configuración de un proyecto. Podemos hacer que cada una de esas partes esté disponible en un determinado entorno.
+		- @Profile, Anotación que puede acompañar a @Component y sus derivados, @Configuration o @ConfigurationProperties. A través de ella indicamos el perfil o perfiles en los cuales tendremos a nuestra disposición dicho componente.
+		- La propiedad spring.profiles.active nos permite indicar el perfil (o perfiles) activos.Se puede especificar de diferentes formas.
+
+			- En application.propperties.
+			- A través del pom.xml
+			- A través de un parámetro de la JVM
+			- A través de una variable de entorno (según el sistema operativo)
+			
+		- Dejaremos las propiedades comunes en application.properties y crearemos un nuevo fichero por perfil. El nombre será application-{profile}.properties.
+
+	- Monitorización con Actuador
+		
+		- Spring Boot Actuator es una librería que proporciona herramientas de monitorización y
+administración. Se acceden a ellas a través de endpoints REST, JMX o una aplicación web. Con Spring Boot 2.X hay un gran rediseño de los actuators que ya se venían utilizando en la versión 1.x
+		- Por defecto, se habilitan solamente dos actuators. Podemos activar el resto de actuators con la propiedad management.endpoints.web.exposure.include=*
+		- Health defecto solamente nos indica si está UP o no. Podemos ver más info si establecemos la propiedad management.endpoint.health.show-details=always.
+		- Spring Boot Admin es un proyecto no oficial. Proporciona una interfaz gráfica desarrollada en Angular.js para monitorizar aplicaciones Spring-Boot aprovechando la información proporcionada por los endpoints de spring-boot-actuator. Está inspirado en microservicios
+
+	- Heroku
+		- Heroku proporciona un mayor nivel de abstracción sobre las instancias de la nube (Amazon EC2).
+		- Se ocupan de todos los aspectos de su "plataforma" (de ahí PaaS).
+		- Despliega una aplicación empujando commits a un repositorio git en heroku.
+		- Capa gratuíta para aplicaciones de diversos tipos (Java, Javascript, Python) y bases de datos (Postgresql, ...)
+
