@@ -224,7 +224,7 @@ MappingJackson[2] HttpMessageConverter: convierte a JSON usando Jackson. Además
 		
 		- @RequestParam asocia un parámetro de la petición a un argumento de un método de un controlador, puede usarse en peticiones multiparte y es válido para anotar MultipartFile, pero si no es de tipo String o MultipartFile necesita un Converter registrado.
 		- @RequestPart asocia una parte de una petición multiparte a un argumento de un método de un controlador, es análogo a @RequestBody, puede usarse con un MultipartFile o cualquier tipo de dato que tenga asociado un HttpMessageConverter.
-		- Es probable que @Request`Param se usa con campos de formulario clave-valor, mientras que @RequestPart se use con partes con contenido más complejo: JSON, XML...
+		- Es probable que @RequestParam se usa con campos de formulario clave-valor, mientras que @RequestPart se use con partes con contenido más complejo: JSON, XML...
 		 
 
 6. Documentando nuestra API REST
@@ -394,3 +394,160 @@ administración. Se acceden a ellas a través de endpoints REST, JMX o una aplic
 		- Despliega una aplicación empujando commits a un repositorio git en heroku.
 		- Capa gratuíta para aplicaciones de diversos tipos (Java, Javascript, Python) y bases de datos (Postgresql, ...)
 
+## Semana 6
+### Curso de seguridad en tu API REST con Spring Boot
+
+1. Introducción
+
+	- Spring Security es un proyecto paraguas que ofrece servicios de seguridad para aplicaciones Java EE, con integración inmediata en proyectos Spring MVC a través de Spring Boot. Tiene gran aceptación en la comunidad de desarrolladores por su flexibilidad en los modelos de autenticación. Se integra rápidamente sin tener que migrar los sistemas a un entorno de terceros. Además, es una plataforma abierta y en constante evolución.
+	
+		- Su código se divide en diferentes .jars desde Spring Security 3, para separar funcionalidades y dependencias de terceros. Algunos de estos módulos son Core, Web, LDAP, OAuth 2.0 Core, OAuth 2.0 Clioent...
+		- Java Filter es una funcionalidad que se coloca entre el cliente y un servlet. Permite dejar pasar una petición, rechazarla o añadir una determinada funcionalidad. Uno de sus usos clásicos es la seguridad.
+		- Al ejecutar un proyecto Spring Boot con la dependencia de Spring Security: se habilita la configuración por defecto a través de un filtro llamdo springSecurityFilterChain, se crea un bean del tipo UserDetailsService con un usuario llamado user y una contraseña aleatoria que se imporime por conlsola y se registra el filtro en el contenedor de servlets para todas las peticiones. Esto produce que se requiera autenticación para interactuar con nuestra aplicación, genera un formulario de login por defecto, genera un mecanismo de logout, protege el almacenamiento de la contraseña con BCrypt, protege contra ataques CSRF, Session Fixation, Clickjacking...
+
+	- La seguridad de una aplicación sueele reducirse a dos problemas más o menos independientes: autenticación, ¿quién eres? y autorización o control de acceso, ¿qué puedes hacer?
+	
+		- Autenticación:
+		
+			- Spring Security proporciona un interfaz, AuthenticationManager, que implementa el patrón estrategia. Un AuthenticationManager puede hacer tres cosas con su único método: Devolver un Authentication (normalemente con authenticated=true), lanzxar una excepción del tipo AuthenticationException o devolver null.
+			- La implementación más usada de AuthenticationManager es ProviderManager, el cual delega en una cadena de instancias de tipo AuthenticationProvider. 
+			- Un AuthenticationProvider se parece a un AuthenticationManager, ya que solo añade un nuevo método que permite verificar si la instancia soporta un determinado tipo de Authentication. 
+			- Un ProviderManager puede soportar diferentes mecanismos de autenticación en una sola aplicación.
+			- Un ProviderManager puede tener un padre, que puede consultar si todos sus provider han devuelto null.
+			- Si no hay un padre disponible, una respuesta null se transforma en una excepción (AuthenticationException)
+			- En ocasiones, se puede tener grupos de recursos (por ejemplo, recursos web en un determinado path), y cada grupo tener su propio AuthenticationManager. Si establecemos una jerarquía, algunos grupos podrían compartir un padre como mecanismo global de autenticación.
+			- Spring Security ofrece algunos mecanismos rápidos de configuración de un AuthenticationManager. El más común es el uso de un AuthenticationManagerBuilder. Éste permite configurar rápidamente autenticación en memoria, JDBC, LDAP, Un servicio de UserDetailsServices personalizado.
+
+		- Autorización o control de acceso:
+		
+			- Una vez que la autenticación ha sido exitosa, pasamos al control de acceso, a través de la interfaz AccessDecisionManager
+			- Hay 3 implementaciones de esta interfaz, y todas delegan en una cadena de AccessDecisionVoter (algo así como el ProviderManager). 
+			- Un AccessDecisionVoter considera un Authentication y un objeto seguro (este objeto es genérico y puede representar cualquier cosa, como un recurso web). El objeto seguro es decorado a través de una colección de ConfigAttributes.
+			- Los ConfigAttributes decoran un objeto con metadatos para determinar el nivel de permisos requeridos para acceder a él.
+			- La interfaz ConfigAttribute es muy sencilla, y tiene solo un método que devuelve un String.
+			- Esta cadena codifica, de alguna forma, la intención del propietario del recurso. Por ejemplo, es típico el nombre de un rol, como ROLE_ADMIN o ROLE_AUDIT.
+			- También es común usar ConfigAttributes basados en expresiones SpEL, como isAuthenticated() o hasRole('THEROLE').
+			- Se pueden configurar estos AccessDecisionVoter a través de diferentes mecanismos, entre otros: Extendiendo la clase WebSecurityConfigurerAdapter y el uso de AntMatchers (patrones de rutas), o a través de las anotaciones @PreAuthorize y @PostAuthorize.
+
+	- WebSecurityConfigurerAdapter:
+	
+		- Clase base para nuestra clase de configuración de seguridad web. Sele venir acompañada de @Configuration + @EnableWebSecuriy y tiene métodos convenienes para configurar tanto la autenticación como la autorización.
+		- @EnableWebSecurity sirve para cambiar la configuración por defecto aplicada por Spring Boot y añadir la nuestra. Se utiliza anotando una clase que extienda a WebSecurityConfigurerAdapter.
+		- Authentication es una intefaz que extiende a Principal. Representa un token para realizar la autenticación, o para un principal una vez autenticado. Normalmene se almacena en el contexto de seguridad SecurityContext manejado por el SecurityContextHolder. Spring Security tiene decenas de clases que lo implementan. Es la interfaz nuclear en la autenticación.
+		- AuthenticationManagerBuilder es un builder utilzado para construir un AuthenticationManager. Permite construir, fácilmente, un AuthenticationManager en memoria, LDAP, JDBC o con UserDetailsService. Se suele configurar sobrescribiendo el método configure(AuthenticationManagerBuilder) de la clase WebSecurityConfigurerAdapter.
+		- UserDetails es una interfaz que representa la información nuclear de un usuario. Almacena la información que posteriormente será encapsulada en un objeto de tipo Authentication. Las implementaciones de esta interfaz deben verificar bien cada método, para saber qué atributos no deben ser nulos. Es implementado por la clase org.springframework.security.core.userdetails.User
+		- User es un objeto modelo que incluye la información de un usuario obenida por un UserDetailsService. Se puede usar directamente, extenderla o implementar la interfaz UserDetails. La implementación de equals y hashCode se basa en el atributo username. Incluye las Authorities del usuario.
+		- GrantedAuthority representa cada privilegio individual. Se pueden usar con perspectiva de grano fino  (CAN_READ_SOME_ENTITY_PROPERTY). El nombre es arbitrario. Solo un método, que devuelve la representación como String. En ocasiones, pueden representar a un rol con el prefijo ROLE_
+		- SimpleGrantedAuthority es una implementación concreta y muy básica de GrantedAuthority. Almacena una representación en un String de una authority concedida a un objeto de tipo Authentication.
+		- UserDetailsService es una interfaz que es capaz de cargar la información de un usuario. Se puede utilizar como DAO. Es utilizado por DaoAuthenticationProvider (un AuthenticationProvider que obtiene la información de los usuarios a través de un UserDetailsService). Tiene un solo método, UserDetails loadUserByUsername(String). Se suele utilizar cuando almacenamos la información de los usuarios a través de Spring Data y el uso de entidades.
+		
+	- Posibilidades para implementar la seguridad en un API REST:
+	
+		- Autenticación básica: mecanismo más elemental a través de HTTP. Definido en el RFC 1945 y RFC 2617. No es elegante, pero cumple su función. Es simple, pero poco fiable. No obliga al uso de cookies ni de formularios de acceso. Sus pasos son:
+		
+			1. Solicitud de un recurso protegido por parte del cliente.
+			2. Solicitud de usuario y contraseña por parte del servidor.
+			3. Envío de usuario:contraseña por parte del cliente.
+			4. Repuesta con el recurso protegido.
+
+		- JWT (Json Web Tokens): realmente no es un estándar de autenticación, se trata de un estándar para la cración de tokens de acceso que permiten propagar la identidad y privilegios. La información puede ser verificada y confiable, ya que está firmada digitalmente. No obliga a que el servidor maneje la sesión. Pasos:
+			
+			1. El cliente liente hace POST /login con usuario y contraseña
+			2. Se crea el token (JWT) con el secreto
+			3. Se devuelve el JWT por parte del servidor
+			4. El cliente envía el JWT en el encabezado Authorization
+			5. Se conprueba la firma del token y se obtiene el recurso
+			6. El servidor responde con el recurso protegido
+			 
+		- OAuth 2.0: es un estándar abierto para la autorización de APIs. Permite compartir información entre sitios sin compartir la identidad. Es un mecanismo usado por grandes compañías como Google, Facebook, etc. Implementa diferentes flujos de autenticación: authorization code flow, implicit flow, resource owner password credential flow,... Se definen varios roles: Dueño del recurso, cliente, servidor de recursos protegidos y servidor de autorización. Pasos:
+		
+			1. El cliente hace la petición de autorización al dueño del recurso,
+			2. El dueño del recurso concede la autrización al cliente.
+			3. El cliente envía la concesión de autorización al servidor de autorización.
+			4. El servidor de autorización envía el token de acceso al cliente.
+			5. El cliente envía el token de acceso al servidor de recursos.
+			6. El servidor de recursos devuelve el recurso protegido.
+
+2. Gestión de usuarios
+
+
+	- Modelo de usuario: representará a una persona que uilice nuestor sistema. Contendrá su información básica: nombre de usuario, contraseña... Además el rol o roles que tiene dicho usuario. Lo implementamos como una entidad de JPA para almacenarlo fácilmente en una base de datos. Si nuestro modelo de usuario implementa UserDeails estará más intefrado con Spring Security. Si no lo está, necesitaremos transformar la entidad usuario en algo que implemente a UserDetails en algún punto.
+
+	- Repositorio y servicio: Habrá que crear un repositorio que herede de JpaRepository y añadir una consulta para obtener un usuario por su nombre de usuario. Una clase base para cualquier servicio de la aplicación que sirve como envoltorio del repositorio, de forma que en los controladores no utilizaos directamente los repositorios, usando solamente servicios. En el servicio añadimos el envoltorio para el método de consulta creado en el repositorio.
+
+	- Servicio UserDetailsService: es una interfaz capaz de cargar la información de usuario. 
+		- Se puede usar como DAO (Data access Object). 
+		- Es utilizado por DaoAuthenticationProvider (un AuthenticationProvider que obtiene la información de los usuarios a través de un UserDetailsService).
+		- Un solo método, UserDetails loadUserByUsername(String).
+		- Se suele utilizar cuando almacenamos la información de los usuarios a través de Spring Data y el uso de entidades.
+		- A menudo hay cierta confusión al respecto UserDetailsService.
+		- Es puramente un DAO para datos de usuario y no realiza otra función que no sea suministrar esos datos a otros componentes dentro del framework.
+		- En particular, no autentica al usuario, lo hace AuthenticationManager.
+		- En muchos casos, tiene más sentido implementar AuthenticationProvider directamente si se necesita un proceso de autenticación personalizado.
+		- Como nuestra clase modelo UserEntity implementa la interfaz UserDetails, el cuerpo de este método es muy sencillo.
+		- Si no se encuentra el usuario, lanzamos una excepción de tipo UsernameNotFoundException
+
+	- Controlador de registro: el controlador para la gestión de usuarios deberá permitir crear nuevos usuarios. Estos usuarios se crearán por defecto con el rol más básico. Su contraseña se debe guardar en la base de datos, pero cifrada. Necesitamos un método que almacene un nuevo usuario, deberá asignar el rol (UserRole.USER) y encriptar la contraseña, para lo que usaremos el algoritmo BCrypt. Recibimos los nuevos datos a través de una instancia de UserEntity. Almacenamos el usuario y devolvemos la instancia almacenada.
+
+	- Para transportar los datos entre las capas del sistema utilizaremos el patrón DTO, creando clases CreateUserDto, GetUserDto, conversores de UserEntity a GetUserDto y demás refactorizaciones.
+
+3. Seguridad básica
+	
+	- La autenticación básica: método para que un cliente (o navegador web) pueda enviar las credenciales de un usuario (usuario y contraseña) al servidor. Definida en la especificación de HTTP (RFC 1945, RFC 2617). Simple de implementar, pero puede ser no adecuada en muchas situaciones.No está pensado para canales públicos Las credenciales se envían en Base64 (no es un cifrado, solo una  codificación). Si trabajamos con HTTP, “cualquiera” las podría descifrar. No obliga al uso de cookies ni de formularios de acceso.
+
+	- Parte del cliente: Se utiliza el encabezado Authorization. La cabecera se construye siguiendo estos pasos:
+		1. Se concatenan nombredeusuario, :, y constraseña
+		2. La cadena se codifica en Base64
+		3. El método de autorización es Basic, seguido de un espacio.
+	
+	- Respuesta del servidor: si la autenticación tiene éxito, se devuelve el recurso solicitado. Si no, se debe devolver un código 401 No autorizado. La respuesta incluirá además una cabecera WWW-Authenticate.
+	
+	- AuthenticationEntryPoint: ae invoca cuando la autenticación falla. Implementación por defecto: BasicAuthenticationEntryPoint.Podemos proporcionar nuestra propia implementación. Además del código de respuesta (401) y la cabecera indicada por el RFC correspondiente, enviaremos un mensaje de error JSON.
+
+4. Seguridad con JWT
+
+	- JWT JSON Web Token (RFC 7519) Es un  mecanismo para propagar de forma seguridad la identidad (y claims o privilegios) entre dos partes. Los privilegios se codifican como objetos JSON. Estos objetos se usan en el cuerpo (payload) de un mensaje firmado digitalmente.
+	- El token (JWT) se trata de una cadena de texto con 3 partes codificadas en Base64 y separadas por un punto. Estas tres partes son el header que indica el algoritmo y el tipo de token, el payload con los datos del usuario y privilegios, y la firma (signature), para verificar que el token es válido. Si el token se modifica por el camino, la comprobación de la fima no será corecta, por lo que el token será denegado. Como el header y el payload no están cifrados, se deberá utilizar HTTPS en toda comunicación para encriptar el tráfico.
+	- Spring Security, de forma nativa, permite usar JWT en el contexto del uso del framework OAuth2.0. Si queremos implementar la autenticación basada en JWT necesitaremos alguna librería externa. JJWT: Java JWT; sirve para Java/Android, es integrable vía Maven/Gradle, su uso es ampliamente extendido y es actualizada con frecuencia. Permite construir un token JWT, parsearlo verificando su firma, comprobar si ha expirado, si no está bien formado o su firma no es válida.
+	- Con JwtProvider se puede generar un token a partir de un Authentication, obtener el ID de usuario a partir del payload de un token y verificar si u token es válido. Con la clase JwtBuilder se puede construir un token JWT de manera fluida. Tiene métodos como setSubject, setIssuedAt, setExpiration, claim, setHeaderParam, compact o signWith.  Keys.hmacShaKeyFor(byte[]) permite generar un SecretKey basado en un array de bytes listo para ser cifrado.
+	- El filtro de autorización es el encargado de revisar si una petición incluye un token JWT válido. Si lo es, autenticaremos al usuario en el contexto de seguridad. OncePerRequestFilter es el filtro que se va a ejecutar una vez en cada petición. UsernamePasswordAuthenticationToken es una representación de Authentication muy simple que presenta el username y el password.
+	- El algoritmo del filtro es el siguiente:
+		
+		- Se extrae el token de la petición
+		- Si el token no es vacío y además es válido: se obtiene el ID de usuario del token, se obtiene el usuario a partir de esa ID, se contruye un Authentication, se establece este Authentication en el contexto de seguridad.
+		- En caso contrario se produce un error y la cadena de filtros termina.
+
+	- AuthenticationController: en la petición del login se loguea al usuario via Authentication Manager, se almacena el Authentication en el contexto de seguridad y se devuelce el usuario y el token al cliente.
+	- La petición del login necesitará recibir las credenciales (nombre de usuario y contraseña). Hará falta un modelo para recibirlo en el método del controlador. La respuesta puede ser tan solo el token o se puede añadir más información. Se extenderá la clase GetUserDto para incluir el token y el resto de datos que se quieran incluir (nombre, roles...)
+
+5. Seguridad con OAuth 2
+
+	- La autenticación OAuth 2.0: es un estándar abierto para la autorización de APIs. Permite compartir información entre sitios sin compartir la identidad. Es utilizado por grandes compañías como Facebook, Microsoft, Github... Implementa diferentes flujos de autenticación, etc.
+	- Surge para paliar a necesidad del envío continuo de credenciales entre cliente y servidor, lograr integración con aplicaciones de terceros, para evitar tener que almacenar el nombre de usuario y la contraseña del usuario al desarrollar una aplicacion, y para que el usuario delegue la capacidad de realizar ciertas acciones en su nombre.
+	- Roles:
+		
+		- Dueño del recurso: es el "usuario" que da la autorización a una aplicación para acceder a su cuenta. El acceso de la aplicación a la cuenta se limita a la autorización otorgada. Se le llama dueño de los recursos porque, aunque la APO no es del usuario, los datos sí.
+		- El cliente es la aplicación que desea acceder a la cuenta del usuario. Para poder hacerlo debe ser autorizado por el usuario, y esa autorización tiene que ser validada por la API. El cliente puede ser una aplicación web, móvil, de escritorio, otra API, etc.
+		- El servidor de autorización es el responsable de gestionar las peticiones de autorización. Verifica la identidad de los usuarios y emite tokens de acceso a la aplicación cliente. En muchas ocasiones, estará implementado por un tercero. Puede formar parte de la misma aplicación que el servidor de recursos.
+		- El servidor de recursos será nuestra API, el servidor que aloja el recurso protegido al que se quiere acceder. Puede formar parte de la misma aplicación que el servidor de autenticación.
+	
+	- El consentimiento es un procedimiento que permite verificar qué pide la aplicación de los usuarios dueños de los recursos. OAuth 2.0 permite asegurar que los usuarios son conscientes y que el permiso es explícito.
+	- Un ámbito o scope son los permisos que se dan al cliente para determinadas operaciones con un recurso protegido en nombre de un usuario. Deben ser lo más concretos posibles.
+	- Para autorizar la apicación y obtener el token son necesarios algunos servicios con los que interactuar (endpoints).
+		
+		+ Authorization para la autorización de la aplicación
+		+ Token para la obtención del token
+			
+	- Tipos de clientes:
+	
+		- Confidenciales: aquellos capaces de guardar una contraseña sin que ésta sea accesible o expuesta
+		- Públicos: aquellos que no son capaces de guardar una contraseña ni mantenerla.
+		
+	- Grant Types. Hay diferentes maneras de obtener el token. Surgen a raíz de los distintos tipos de clientes que pueden querer acceder a una serie de recursos.
+	
+		- Authorization Code
+		- Implicit
+		- Resource Owner Password Credentials
+		- Client Credentials Flow
+		- Device Code Flow
+		- ...
